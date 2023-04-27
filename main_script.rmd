@@ -1,0 +1,232 @@
+---
+title: "Traitement de données FTIR et visualisation des données"
+subtitle : "ébauche d'implémentation"
+author: "Philippe STOCKER"
+date: "2022-05-31"
+output:
+  html_document:
+    df_print: paged
+geometry: margin = 1.5cm
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preprocessing des données bruts : Bash et Python
+
+Première étape, ranger les csv dans des dossier et attention partuculière aux nomx des fichiers sans espaces et caractères exotiques
+
+Préconisation la nomenclature des fichier : **group_modality.csv**
+
+Ici, on aura la nomenclature suivante :
+
+    --> processing
+        --> ctrl_algue.csv
+        --> ctrl_iris.csv
+        --> ctrl_prox.csv
+        --> pla_algue.csv
+        --> pla_iris.csv
+        --> pla_prox.csv
+        --> outputs
+        ---- --> output_ctrl_algue.csv
+        ---- --> output_ctrl_iris.csv
+        ---- --> output_ctrl_prox.csv
+        ---- --> output_pla_algue.csv
+        ---- --> output_pla_iris.csv
+        ---- --> output_pla_prox.csv
+
+### Pour les fichiers bruts rangés dans les bons dossiers
+
+#### Ranger comme suit :
+
+    --> processing
+        --> ctrl
+        ---- --> algue
+        ---- --> iris
+        ---- --> prox
+        --> pla
+        ---- --> algue
+        ---- --> iris
+        ---- --> prox
+
+``` bash
+## Supprimer les deux premières lignes
+for f in *.csv
+do
+    sed -i '1,2d' $f
+done
+
+## Fusionner les fichiers dans leurs dossiers respectifs
+cat *csv name_files > group_modality.csv
+```
+
+### 
+
+``` python
+with open('ctrl_algue.csv', 'r') as istr:
+    with open('output_ctrl_algue.csv', 'w') as ostr:
+        for line in istr:
+            line = line.rstrip('\n') + ',control,algue'
+            print(line, file=ostr)
+            
+with open('ctrl_iris.csv', 'r') as istr:
+    with open('output_ctrl_iris.csv', 'w') as ostr:
+        for line in istr:
+            line = line.rstrip('\n') + ',control,iris'
+            print(line, file=ostr)
+
+with open('ctrl_prox.csv', 'r') as istr:
+    with open('output_ctrl_prox.csv', 'w') as ostr:
+        for line in istr:
+            line = line.rstrip('\n') + ',control,prox'
+            print(line, file=ostr)
+
+with open('pla_algue.csv', 'r') as istr:
+    with open('output_pla_algue.csv', 'w') as ostr:
+        for line in istr:
+            line = line.rstrip('\n') + ',pla,algue'
+            print(line, file=ostr)
+            
+with open('pla_iris.csv', 'r') as istr:
+    with open('output_pla_iris.csv', 'w') as ostr:
+        for line in istr:
+            line = line.rstrip('\n') + ',pla,iris'
+            print(line, file=ostr)
+
+with open('pla_prox.csv', 'r') as istr:
+    with open('output_pla_prox.csv', 'w') as ostr:
+        for line in istr:
+            line = line.rstrip('\n') + ',pla,prox'
+            print(line, file=ostr)
+```
+
+### 
+
+``` bash
+
+### à l'issue écrire dans la première ligne du dataset
+for f in *.csv
+do
+    sed -i "1i\time,lambda,measure" $f
+done
+```
+
+## Import des librairies
+
+```{r lib}
+library(ggplot2)
+library(dplyr)
+```
+
+## Import des datasets
+
+```{r}
+dataset <- read.csv("dataset.csv")
+df <- dataset
+head(dataset)
+df$wavenumber <- as.factor(df$wavenumber)
+head(df)
+
+## As Dataframe, because, RTFM
+ftr <- data.frame(df)
+head(ftr)
+
+```
+
+## Grouper l'échantillonnage
+
+```{r}
+
+## moyenne par groupe des 5 mesures
+grp <- group_by(ftr, group, modality, wavenumber)
+mean <- summarise(grp, m = mean(value))
+```
+
+### Convertir en absorbance et Normaliser les données
+
+```{r}
+
+mean$m <- (1/mean$m)
+head(mean)
+
+ftr <- mean
+head
+
+## Normalisation des données
+
+# Define Min-Max normalization function
+min_max_norm <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+# Apply Min-Max
+nrm <- as.data.frame(lapply(ftr[4], min_max_norm))
+head(nrm)
+
+group <- ftr$group 
+modality <- ftr$modality 
+wavenumber <- ftr$wavenumber 
+measure <- nrm$m
+
+ftr <- data.frame(group, modality, wavenumber, measure)
+ftr$wavenumber <- as.factor(ftr$wavenumber)
+
+head(ftr)
+
+### Fin normalization
+```
+
+## Visualisation des données
+
+De 3 manières différentes, en séparant les groupes par pannels selon groupes et modalités.
+
+### Premier Graphique : IR absorbance spectrums by group and modality
+
+```{r}
+
+## Longueurs d'ondes d'intéret (tracer les Asymptotes)
+#vertical.lines <- c(700, 1000, 3000) 
+## mettre dans le vecteur les longueurs d'ondes d'intéret.
+
+ggplot(ftr, aes(x=wavenumber, y=measure, colour=group, group=interaction(group, modality))) +
+  #geom_vline(xintercept = vertical.lines ,linetype = "dashed", color = "red", size=0.5) +
+  geom_line(aes(linetype = modality)) + scale_x_discrete(breaks=seq(600, 4000, 400)) + 
+  labs(title = '', x = 'wavenumber', y = 'absorbance') + 
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle=45, hjust = 1)) +
+  facet_grid(group ~ modality) 
+```
+
+### Deuxième Graphique : IR absorbance spectrums
+
+```{r}
+
+## Longueurs d'ondes d'intéret (tracer les Asymptotes)
+#vertical.lines <- c(700, 1000, 3000)
+## mettre dans le vecteur les longueurs d'ondes d'intéret.
+
+ggplot(ftr, aes(x=wavenumber, y=measure, colour=group, group=interaction(group, modality))) +
+  #geom_vline(xintercept = vertical.lines ,linetype = "dashed", color = "red", size=0.5) +
+  geom_line(aes(linetype = modality)) + scale_x_discrete(breaks=seq(600, 4000, 100)) + 
+  labs(title = '', x = 'wavenumber', y = 'absorbance') + 
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle=45, hjust = 1))
+```
+
+### Troisième Graphique : IR absorbance spectrums by groups
+
+```{r}
+
+## Longueurs d'ondes d'intéret (tracer les Asymptotes)
+#vertical.lines <- c(700, 1000, 3000)
+## mettre dans le vecteur les longueurs d'ondes d'intéret.
+
+ggplot(ftr, aes(x=wavenumber, y=measure, colour=group, group=interaction(group, modality))) +
+  #geom_vline(xintercept = vertical.lines ,linetype = "dashed", color = "red", size=0.5) +
+  geom_line(aes(linetype = modality)) + scale_x_discrete(breaks=seq(600, 4000, 400)) + 
+  labs(title = '', x = 'wavenumber', y = 'absorbance') + 
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle=45, hjust = 1)) +
+  facet_wrap(modality ~ .) 
+```
