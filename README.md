@@ -1,3 +1,5 @@
+![POSTER_IR_Spec-Viz](https://user-images.githubusercontent.com/106185720/234980934-2c4c864b-677f-4ba6-8759-5ad6ae5efd3c.png)
+
 # iR-BioSpecViz
 This tool visualizes Infrared spectroscopy data, formats &amp; normalizes raw data for efficient biomolecular analysis, &amp; provides meaningful FTIR spectra visualizations in R.
 
